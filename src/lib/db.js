@@ -7,7 +7,7 @@ const db =
   });
 
 if (process.env.NODE_ENV !== "development") {
-  global.prisma = db;
+  globalThis.prisma = db;
 }
 
 export default db;
