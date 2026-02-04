@@ -4,7 +4,7 @@ import db from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
-export const currentUsers = async () => {
+export const currentUser = async () => {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
 
