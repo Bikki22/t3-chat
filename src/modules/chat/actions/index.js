@@ -32,7 +32,7 @@ export const createChatWithMessage = async (values) => {
         title,
         model,
         userId: user.id,
-        messages: {
+        message: {
           create: {
             content,
             messageRole: MessageRole.USER,
@@ -42,7 +42,7 @@ export const createChatWithMessage = async (values) => {
         },
       },
       include: {
-        messages: true,
+        message: true,
       },
     });
 
@@ -58,6 +58,88 @@ export const createChatWithMessage = async (values) => {
     return {
       success: false,
       message: "Failed to create chat",
+    };
+  }
+};
+
+export const getAllChats = async () => {
+  try {
+    const user = await currentUser();
+
+    if (!user) {
+      return {
+        success: false,
+        message: "unauthorized user",
+      };
+    }
+
+    const chats = await db.chat.findMany({
+      where: {
+        userId: user.id,
+      },
+      include: {
+        message: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return {
+      success: true,
+      message: "Chats fetched successfully",
+      data: chats,
+    };
+  } catch (error) {
+    console.error("Error fetching chats:", error);
+    return {
+      success: false,
+      message: "Failed to fetch chats",
+    };
+  }
+};
+
+export const deleteChat = async (chatId) => {
+  try {
+    const user = await currentUser();
+
+    if (!user) {
+      return {
+        success: false,
+        msesage: "unauthorized user",
+      };
+    }
+
+    const chat = await db.chat.findUnique({
+      where: {
+        id: chatId,
+        userId: user.id,
+      },
+    });
+
+    if (!chat) {
+      return {
+        success: false,
+        message: "Chat not ofun found",
+      };
+    }
+
+    await db.chat.delete({
+      where: {
+        id: chatId,
+      },
+    });
+
+    revalidatePath("/");
+    return {
+      success: true,
+      message: "chat deleted successfully",
+    };
+  } catch (error) {
+    console.error("Error deleting chat", error);
+    return {
+      success: false,
+      message: "Failed to delete  chat",
     };
   }
 };
