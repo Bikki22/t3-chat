@@ -69,7 +69,7 @@ export function ModelSelector({
           <Button
             variant="ghost"
             role="combobox"
-            araia-expanded={open}
+            aria-expanded={open}
             className={cn(
               "h-8 justify-between gap-2 px-2 text-xs hover:bg-accent",
               className,

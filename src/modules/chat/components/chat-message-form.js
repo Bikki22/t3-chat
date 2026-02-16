@@ -14,7 +14,7 @@ const ChatMessageForm = ({ initialMessage, onMessageChange }) => {
   const [message, setMessage] = useState("");
   const { data: models, isPending } = useAIModels();
 
-  const [selectedModel, setSelectedModel] = useState(models?.models[0].id);
+  const [selectedModel, setSelectedModel] = useState(models?.models[0]?.id);
 
   const { mutateAsync, isPending: isChatPending } = useCreateChat();
 
@@ -25,11 +25,12 @@ const ChatMessageForm = ({ initialMessage, onMessageChange }) => {
     }
   }, [initialMessage, onMessageChange]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
     try {
       e.preventDefault();
       await mutateAsync({ content: message, model: selectedModel });
       toast.success("Message sent successfully");
+      console.log("Message sent");
     } catch (error) {
       console.log("Error sending messages", error);
       toast.error("Failed to send message");
