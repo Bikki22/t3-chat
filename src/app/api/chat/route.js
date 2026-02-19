@@ -1,7 +1,8 @@
 import { convertToModelMessages, streamText, tool } from "ai";
 import db from "@/lib/db";
-import { MessageRole } from "@prisma/client";
+import { MessageRole, MessageType } from "@prisma/client";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { CHAT_SYSTEM_PROMPT } from "@/lib/prompt";
 
 // initialize openRouter provider
 const provider = createOpenRouter({
@@ -18,15 +19,36 @@ function convertStoreMessageToUI(msg) {
     return {
       id: msg.id,
       role: msg.messageRole.toLowerCase(),
+      parts: validParts,
+      createdAt: msg.createdAt,
+    };
+  } catch (error) {
+    return {
+      id: msg.id,
+      role: msg.messageRole.toLowerCase(),
       parts: [{ type: "text", text: msg.content }],
       createdAt: msg.createdAt,
     };
-  } catch (error) {}
+  }
+}
+
+function extractPartsAsJSON(message) {
+  if (message.parts && Array.isArray(message.parts)) {
+    return JSON.stringify(message.parts);
+  }
+
+  const content = message.content || "";
+  return JSON.stringify([{ type: "text", text: content }]);
 }
 
 export async function POST(req) {
   try {
-    const { chatId, messages: newMessages, model } = await req.json();
+    const {
+      chatId,
+      messages: newMessages,
+      model,
+      skipUserMessage,
+    } = await req.json();
 
     const previousMessages = chatId
       ? await db.message.findMany({
@@ -50,6 +72,7 @@ export async function POST(req) {
     const allUIMessages = [...uiMessages, ...normalizedNewMessages];
 
     let modelMessages;
+
     try {
       modelMessages = convertToModelMessages(allUIMessages);
     } catch (conversionError) {
@@ -69,5 +92,63 @@ export async function POST(req) {
       messages: modelMessages,
       system: CHAT_SYSTEM_PROMPT,
     });
-  } catch (error) {}
+
+    return results.toUIMessageStreamResponse({
+      sendReasoning: true,
+      originalMessages: allUIMessages,
+      onFinish: async ({ responseMessage }) => {
+        try {
+          const messagesToSave = [];
+          if (!skipUserMessage) {
+            const latestUserMessage =
+              normalizedNewMessages[normalizedNewMessages.length - 1];
+            if (latestUserMessage?.role === "user") {
+              const userPartsJSON = extractPartsAsJSON(latestUserMessage);
+
+              messagesToSave.push({
+                chatId,
+                content: userPartsJSON,
+                messageRole: MessageRole,
+                model,
+                MessageType: MessageType.NORMAL,
+              });
+            }
+          }
+
+          if (responseMessage?.parts && responseMessage.parts.length > 0) {
+            const assistantPartsJSON = extractPartsAsJSON(responseMessage);
+
+            messagesToSave.push({
+              chatId,
+              content: assistantPartsJSON,
+              messageRole: MessageRole.ASSISTANT,
+              model,
+              messageType: "NORMAL",
+            });
+          }
+
+          if (messagesToSave.length > 0) {
+            await db.message.createMany({
+              data: messagesToSave,
+            });
+          }
+        } catch (error) {
+          console.error("Error  saving messages", error);
+        }
+      },
+    });
+  } catch (error) {
+    console.error("API Route Error:", error);
+
+    return new Response(
+      JSON.stringify({
+        error: error.message || "Internal server error",
+        details: error.toString(),
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 }
